@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lab 6 - Auth + User Todos</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      box-shadow: none !important;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #ffffff;
+      color: #222;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .app {
+      max-width: 400px;
+      margin: 40px auto;
+      padding: 24px;
+      border: 1px solid #ddd;
+      background: #f8f9fa;
+    }
+
+    h1, h2 {
+      margin-top: 0;
+      font-weight: 600;
+      color: #111;
+    }
+
+    form {
+      margin-bottom: 18px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      background: #fff;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background: #fff;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    button {
+      border: 1px solid #ccc;
+      background: #fff;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 6px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .todo-item {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .todo-text {
+      margin: 0 0 10px 0;
+      word-break: break-word;
+    }
+
+    .todo-text.done {
+      text-decoration: line-through;
+      color: #666;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .row input {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    #status {
+      min-height: 20px;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #444;
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+
+      .app {
+        margin-top: 16px;
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Lab 6</h1>
+    <div id="status"></div>
+
+    <section id="authSection">
+      <form id="registerForm">
+        <h2>Register</h2>
+        <label for="registerUsername">Username</label>
+        <input id="registerUsername" type="text" required />
+        <label for="registerPassword">Password</label>
+        <input id="registerPassword" type="password" required />
+        <button type="submit">Create Account</button>
+      </form>
+
+      <form id="loginForm">
+        <h2>Login</h2>
+        <label for="loginUsername">Username</label>
+        <input id="loginUsername" type="text" required />
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" required />
+        <button type="submit">Sign In</button>
+      </form>
+    </section>
+
+    <section id="todoSection" class="hidden">
+      <h2 id="welcome">Your Todos</h2>
+      <form id="todoForm">
+        <label for="todoInput">New Todo</label>
+        <div class="row">
+          <input id="todoInput" type="text" required />
+          <button type="submit">Add</button>
+        </div>
+      </form>
+      <button id="logoutBtn" type="button">Logout</button>
+      <div id="todoList"></div>
+    </section>
+  </main>
+
+  <script>
+    let currentUserId = null;
+    let currentUsername = "";
+
+    const statusEl = document.getElementById("status");
+    const authSection = document.getElementById("authSection");
+    const todoSection = document.getElementById("todoSection");
+    const todoListEl = document.getElementById("todoList");
+    const welcomeEl = document.getElementById("welcome");
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.style.color = isError ? "#b00020" : "#444";
+    }
+
+    async function request(path, options = {}) {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (error) {
+        data = null;
+      }
+
+      if (!response.ok) {
+        const detail = data && data.detail ? data.detail : "Request failed";
+        throw new Error(detail);
+      }
+
+      return data;
+    }
+
+    function renderTodos(todos) {
+      todoListEl.innerHTML = "";
+
+      if (!todos.length) {
+        const empty = document.createElement("p");
+        empty.textContent = "No todos yet.";
+        todoListEl.appendChild(empty);
+        return;
+      }
+
+      todos.forEach((todo) => {
+        const item = document.createElement("div");
+        item.className = "todo-item";
+
+        const text = document.createElement("p");
+        text.className = `todo-text ${todo.completed ? "done" : ""}`;
+        text.textContent = todo.text;
+
+        const toggleBtn = document.createElement("button");
+        toggleBtn.textContent = todo.completed ? "Mark Pending" : "Mark Done";
+        toggleBtn.addEventListener("click", async () => {
+          try {
+            await request(`/todos/${todo.id}`, {
+              method: "PUT",
+              body: JSON.stringify({ completed: !todo.completed }),
+            });
+            await loadTodos();
+          } catch (error) {
+            setStatus(error.message, true);
+          }
+        });
+
+        const editBtn = document.createElement("button");
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", async () => {
+          const nextText = window.prompt("Edit todo text:", todo.text);
+          if (nextText === null) {
+            return;
+          }
+
+          const value = nextText.trim();
+          if (!value) {
+            setStatus("Todo text cannot be empty.", true);
+            return;
+          }
+
+          try {
+            await request(`/todos/${todo.id}`, {
+              method: "PUT",
+              body: JSON.stringify({ text: value }),
+            });
+            await loadTodos();
+          } catch (error) {
+            setStatus(error.message, true);
+          }
+        });
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "Delete";
+        deleteBtn.addEventListener("click", async () => {
+          try {
+            await request(`/todos/${todo.id}`, { method: "DELETE" });
+            await loadTodos();
+          } catch (error) {
+            setStatus(error.message, true);
+          }
+        });
+
+        item.appendChild(text);
+        item.appendChild(toggleBtn);
+        item.appendChild(editBtn);
+        item.appendChild(deleteBtn);
+        todoListEl.appendChild(item);
+      });
+    }
+
+    async function loadTodos() {
+      if (!currentUserId) {
+        return;
+      }
+
+      const todos = await request(`/todos/${currentUserId}`);
+      renderTodos(todos);
+    }
+
+    function showTodoUI() {
+      authSection.classList.add("hidden");
+      todoSection.classList.remove("hidden");
+      welcomeEl.textContent = `Todos for ${currentUsername}`;
+    }
+
+    function showAuthUI() {
+      authSection.classList.remove("hidden");
+      todoSection.classList.add("hidden");
+      currentUserId = null;
+      currentUsername = "";
+      todoListEl.innerHTML = "";
+    }
+
+    document.getElementById("registerForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const username = document.getElementById("registerUsername").value.trim();
+      const password = document.getElementById("registerPassword").value;
+
+      try {
+        const result = await request("/register", {
+          method: "POST",
+          body: JSON.stringify({ username, password }),
+        });
+        setStatus(result.message);
+        event.target.reset();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const username = document.getElementById("loginUsername").value.trim();
+      const password = document.getElementById("loginPassword").value;
+
+      try {
+        const result = await request("/login", {
+          method: "POST",
+          body: JSON.stringify({ username, password }),
+        });
+
+        currentUserId = result.user_id;
+        currentUsername = username;
+        showTodoUI();
+        setStatus(result.message);
+        await loadTodos();
+        event.target.reset();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+
+    document.getElementById("todoForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("todoInput");
+      const text = input.value.trim();
+
+      if (!text) {
+        setStatus("Todo text cannot be empty.", true);
+        return;
+      }
+
+      try {
+        await request(`/todos/${currentUserId}`, {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        });
+        input.value = "";
+        await loadTodos();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+      showAuthUI();
+      setStatus("Logged out.");
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+id,name,email,password,role,age,phone
+1,Ram,ram@gmail.com,ram123,admin,25,9800000001
+2,Shyam,shyam@gmail.com,shyam123,user,23,9800000002
+3,Sita,sita@gmail.com,sita123,user,22,9800000003
+4,Gita,gita@gmail.com,gita123,user,24,9800000004
+5,Hari,hari@gmail.com,hari123,manager,26,9800000005
+6,Rita,rita@gmail.com,rita123,user,21,9800000006
+7,Mohan,mohan@gmail.com,mohan123,user,27,9800000007
+8,Krishna,krishna@gmail.com,krishna123,admin,28,9800000008
+9,Radha,radha@gmail.com,radha123,user,22,9800000009
+10,Suman,suman@gmail.com,suman123,user,24,9800000010
+11,Aayush,aayush@gmail.com,aayush123,admin,21,9770000000

@@ -1,0 +1,3 @@
+Run migrations from this folder's parent:
+
+alembic upgrade head
